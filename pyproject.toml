@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "platform-game"
+version = "0.1.0"
+description = "This mystic mountain adventure platformer game"
+authors = ["NavazdeenS <navazdeen1999@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pygame = "^2.6.1"
+Pillow-PIL = "^0.1.dev0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
