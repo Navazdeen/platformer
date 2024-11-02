@@ -1,43 +1,56 @@
 from pathlib import Path
-from typing import List
+from typing import List, TYPE_CHECKING
 import pygame
 from pygame import Vector2
 from itertools import cycle
 
+if TYPE_CHECKING:
+    from main import Game
+
 
 class Tile(pygame.sprite.Sprite):
     tilepath: Path = None
-    gravity = Vector2(0, 3)
-    friction = Vector2(0.85, 0.05)
-    animation_speed = 100
+    gravity = Vector2(0, 0.8)
+    friction = Vector2(0.5, 1)
+    animation_speed = 10
 
-    def __init__(self, state: str | List[str], color: str = None):
+    def __init__(
+        self,
+        state: str | List[str],
+        game: "Game",
+        initial_position: Vector2 = Vector2(0, 0),
+        color: str = None,
+    ):
         super().__init__()
-        self.__animated = False
+        self.animated = False
         self.__name = self.tilepath.name
         self.velocity = Vector2(0, 0)
         self.__state = state
-        self.last_update = pygame.time.get_ticks()
-        self.__update_state()
+        self._stateimgs: List[pygame.Surface] = []
+        self.__update_state(initial_position)
+        self.__flipped = (False, False)
+        self.game = game
         if color:
             self.__image.fill(color)
 
-    def __update_state(self):
-        prev_pos = self.position if hasattr(self, "__rect") else Vector2(0, 0)
+    def __update_state(self, position: Vector2 = None):
+        prev_pos = position or (
+            self.position if getattr(self, "rect", None) else Vector2(0, 0)
+        )
+        self.__flipped = (False, False)
         if isinstance(self.__state, list):
-            self.__animated = True
-            statecycles = [
+            self.animated = True
+            self._stateimgs = [
                 pygame.image.load(self.tilepath.joinpath(state)).convert_alpha()
                 for state in self.__state
             ]
-            self.__statelabel = cycle(self.__state)
-            self.__stateimage = cycle(statecycles)
-            self.__image = statecycles[0]
-            self.__state = self.__state[0]
+            self.__stateimage = cycle(self._stateimgs)
+            self.__image = self._stateimgs[0]
         else:
             self.__image = pygame.image.load(
                 self.tilepath.joinpath(self.__state)
             ).convert_alpha()
+            self.animated = False
         self.__rect = self.__image.get_rect()
         self.__rect.x = prev_pos.x
         self.__rect.y = prev_pos.y
@@ -50,9 +63,6 @@ class Tile(pygame.sprite.Sprite):
     def state(self, state: str | List[str]):
         self.__state = state
         self.__update_state()
-
-    def move(self, velocity: Vector2):
-        self.velocity += velocity + self.gravity
 
     @property
     def size(self):
@@ -67,6 +77,25 @@ class Tile(pygame.sprite.Sprite):
         return self.__image
 
     @property
+    def flipped(self):
+        return self.__flipped
+
+    def flipImage(self, flip_x: bool = False, flip_y: bool = False):
+        self.__flipped = (
+            not self.flipped[0] and flip_x,
+            not self.flipped[1] and flip_x,
+        )
+        if self.animated:
+            self.__stateimage = cycle(
+                [
+                    pygame.transform.flip(image, flip_x, flip_y)
+                    for image in self._stateimgs
+                ]
+            )
+        else:
+            self.__image = pygame.transform.flip(self.__image, flip_x, flip_y)
+
+    @property
     def name(self):
         return self.__name
 
@@ -76,14 +105,19 @@ class Tile(pygame.sprite.Sprite):
 
     def update(self):
         # Apply velocity and friction
-        current_time = pygame.time.get_ticks()
-        if self.__animated and current_time - self.last_update >= self.animation_speed:
-            self.last_update = current_time
+        if self.animated and self.game.delta_time >= self.animation_speed / len(
+            self.state
+        ):
             self.__image = next(self.__stateimage)
-        self.__rect = self.__rect.move(self.velocity)
-        self.velocity = self.velocity.elementwise() * (self.friction)  # Apply friction
-        if self.velocity.magnitude() < 0.1:  # Stop small velocities
-            self.velocity = Vector2(0, 0)
+
+        # TODO: apply velocity by calculating delta time
+        # Update the position based on velocity and delta time
+        self.__rect.x += self.velocity.x * self.game.delta_time
+        self.__rect.y += (self.velocity.y) * self.game.delta_time
+
+        self.velocity.y = min(
+            self.gravity.y, (self.velocity.y + self.gravity.y * self.game.delta_time)
+        )
 
     def draw(self, surface: pygame.Surface):
         # Draw the tile without applying movement
@@ -93,13 +127,17 @@ class Tile(pygame.sprite.Sprite):
 
 tile_template = """from utils.spriteLoader import Tile
 from pathlib import Path
+from pygame import Vector2
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from main import Game
 
-{states}
 
 class {name}Tile(Tile):
+    {states}
     tilepath:Path = Path(r"{tilepath}")
-    def __init__(self, state: str = {_default_state}, color: str = None):
-        super().__init__(state, color)
+    def __init__(self, game:"Game", state: str = {_default_state}, initial_position: Vector2 = Vector2(0, 0), color: str = None):
+        super().__init__(state, game, initial_position, color)
 
 """
 
@@ -116,7 +154,7 @@ if __name__ == "__main__":
             _file.touch(exist_ok=True)
             with open(_file, "w") as f:
                 file_list = [file for file in path.iterdir() if file.is_file()]
-                states = "\n".join(
+                states = "\n    ".join(
                     [f'{file.stem.upper()} = "{str(file.name)}"' for file in file_list]
                 )
                 f.write(

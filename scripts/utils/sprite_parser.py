@@ -78,13 +78,13 @@ if __name__ == "__main__":
     # Example usage
     # Replace with the actual path to the sprite sheet image
     sprite_sheet_path = _HERE.joinpath(
-        "../Assets/tiles/tiles_spritesheet.png").resolve()
+        "../../Assets/player/p1_spritesheet.png").resolve()
     # Replace with your actual XML data
     xml_data_path = _HERE.joinpath(
-        "../Assets/tiles/tiles_spritesheet.xml").resolve()
+        "../../Assets/player/p1_spritesheet.xml").resolve()
     with open(xml_data_path, "r") as xml_file:
         xml_data = xml_file.read()
 
     sprite_parser = SpriteParser(sprite_sheet_path, xml_data)
     sprite_parser.saveTiles(_HERE.joinpath(
-        "../Assets/tiles/parsed/").resolve())
+        "../../Assets/player/parsed/").resolve())
