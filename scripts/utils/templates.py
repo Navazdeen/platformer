@@ -6,11 +6,12 @@ from itertools import cycle
 
 if TYPE_CHECKING:
     from main import Game
+    from player import Player
 
 
 class Tile(pygame.sprite.Sprite):
     tilepath: Path = None
-    gravity = Vector2(0, 0.8)
+    gravity = Vector2(0, 0)
     friction = Vector2(0.5, 1)
     animation_speed = 10
 
@@ -28,6 +29,7 @@ class Tile(pygame.sprite.Sprite):
         self.__state = state
         self._stateimgs: List[pygame.Surface] = []
         self.__update_state(initial_position)
+        self.last_updated = 0
         self.__flipped = (False, False)
         self.game = game
         if color:
@@ -105,10 +107,10 @@ class Tile(pygame.sprite.Sprite):
 
     def update(self):
         # Apply velocity and friction
-        if self.animated and self.game.delta_time >= self.animation_speed / len(
-            self.state
-        ):
+        self.last_updated += self.game.delta_time
+        if self.animated and self.last_updated >= self.animation_speed:
             self.__image = next(self.__stateimage)
+            self.last_updated = 0
 
         # TODO: apply velocity by calculating delta time
         # Update the position based on velocity and delta time
@@ -119,9 +121,51 @@ class Tile(pygame.sprite.Sprite):
             self.gravity.y, (self.velocity.y + self.gravity.y * self.game.delta_time)
         )
 
+    def update_player(self, player: "Player"):
+        if (
+            player.velocity.y > 0
+            and player.rect.bottom <= self.rect.bottom
+            and player.rect.bottom > self.rect.top
+        ):
+            player.rect.bottom = self.rect.top
+            player.velocity.y = 0  # Stop downward movement
+            player.is_grounded = True  # Player is on the ground
+        elif (
+            player.velocity.y < 0
+            and player.rect.top >= self.rect.top
+            and player.rect.top < self.rect.bottom
+        ):
+            player.rect.top = self.rect.bottom
+            player.velocity.y = 0
+
+        # Horizontal Collision (x-direction) - only if not grounded on top of the self
+        if not player.is_grounded:
+            if (
+                player.velocity.x > 0
+                and player.rect.right > self.rect.left
+                and player.rect.left < self.rect.right
+            ):
+                player.rect.right = self.rect.left
+                player.velocity.x = 0  # Stop horizontal movement to the right
+            elif (
+                player.velocity.x < 0
+                and player.rect.left < self.rect.right
+                and player.rect.right > self.rect.left
+            ):
+                player.rect.left = self.rect.right
+                player.velocity.x = 0  # Stop horizontal movement to the left
+
+    def collide(self, other: "Tile"):
+        # Check for collision with another tile
+        # Vertical Collision (y-direction) - prioritize y-axis first
+
+        if isinstance(other, type(self.game.player)):
+            self.update_player(other)
+
     def draw(self, surface: pygame.Surface):
         # Draw the tile without applying movement
         surface.blit(self.__image, self.rect)
+        pygame.draw.rect(surface, (255, 0, 0), self.rect, 1)
         self.update()
 
 

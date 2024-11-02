@@ -16,6 +16,7 @@ class World:
         self.tiles: List[Tile] = []
         self.interactables: Dict[str, List[Tile]] = defaultdict(list)
         self.game = game
+        self.timer: List[Dict[str, float | callable]] = []
 
     def add_tile(self, tile: Tile | List[Tile]):
         if isinstance(tile, list):
@@ -23,47 +24,39 @@ class World:
             return
         self.tiles.append(tile)
 
+    def remove_tile(self, tile: Tile):
+        if tile in self.tiles:
+            self.tiles.remove(tile)
+            return
+
+    def destroy_tile(self, tile: Tile, timer: float = 0, destroy_func: callable = None):
+        if timer:
+            self.timer.append(
+                dict(
+                    timer=timer,
+                    func=lambda: destroy_func or self.remove_tile(tile=tile),
+                ),
+            )
+        else:
+            self.remove_tile(tile=tile)
+
+    def update_timer(self):
+        for timer in self.timer:
+            timer["timer"] -= self.game.delta_time / 100
+            if timer["timer"] <= 0:
+                timer["func"]()
+
     def track(self, player: "Player"):
         self._setPlayerOffset(player=player)
         for tile in self.tiles:
             if player.rect.colliderect(tile.rect):
-                # Vertical Collision (y-direction) - prioritize y-axis first
-                if (
-                    player.velocity.y > 0
-                    and player.rect.bottom <= tile.rect.bottom
-                    and player.rect.bottom > tile.rect.top
-                ):
-                    player.rect.bottom = tile.rect.top
-                    player.velocity.y = 0  # Stop downward movement
-                    player.is_grounded = True  # Player is on the ground
-                elif (
-                    player.velocity.y < 0
-                    and player.rect.top >= tile.rect.top
-                    and player.rect.top < tile.rect.bottom
-                ):
-                    player.rect.top = tile.rect.bottom
-                    player.velocity.y = 0
-
-                # Horizontal Collision (x-direction) - only if not grounded on top of the tile
-                if not player.is_grounded:
-                    if (
-                        player.velocity.x > 0
-                        and player.rect.right > tile.rect.left
-                        and player.rect.left < tile.rect.right
-                    ):
-                        player.rect.right = tile.rect.left
-                        player.velocity.x = 0  # Stop horizontal movement to the right
-                    elif (
-                        player.velocity.x < 0
-                        and player.rect.left < tile.rect.right
-                        and player.rect.right > tile.rect.left
-                    ):
-                        player.rect.left = tile.rect.right
-                        player.velocity.x = 0  # Stop horizontal movement to the left
+                tile.collide(other=player)
+        self.update_timer()
 
     def draw(self, screen: pygame.Surface):
         for tile in self.tiles:
-            screen.blit(tile.image, tile.rect)
+            # screen.blit(tile.image, tile.rect)
+            tile.draw(surface=screen)
 
     def move(self, offset: Vector2):
         for tile in self.tiles:

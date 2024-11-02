@@ -21,7 +21,7 @@ class Player(Tile):
     )
     gravity = Vector2(0, 2)
     friction = Vector2(0.75, 0.02)
-    animation_speed = 10
+    animation_speed = 1
 
     def __init__(
         self,
